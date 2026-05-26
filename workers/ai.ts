@@ -2,8 +2,8 @@ import type { Env, Product } from "./types";
 
 export async function generateLifecycleTemplate(env: Env, product: Product | null, goal: string) {
   const fallbackSubject = product?.name ? `A quick next step for ${product.name}` : "A quick next step";
-  const fallbackHtml = `<p>Hi {{first_name}},</p><p>I wanted to share one practical next step for getting value from ${escapeText(product?.name ?? "the product")}.</p><p>{{company}} teams usually see momentum when they complete the first activation step.</p><p>Reply if you want help.</p><p><a href="${escapeText(product?.url ?? "https://example.com")}">Continue setup</a></p><p>{{unsubscribe_url}}</p>`;
-  const fallbackText = `Hi {{first_name}},\n\nI wanted to share one practical next step for getting value from ${product?.name ?? "the product"}.\n\nReply if you want help.\n\nContinue setup: ${product?.url ?? "https://example.com"}\n\n{{unsubscribe_url}}`;
+  const fallbackHtml = `<p>Hi {{full_name}},</p><p>I wanted to share one practical next step for getting value from ${escapeText(product?.name ?? "the product")}.</p><p>Reply if you want help.</p><p><a href="${escapeText(product?.url ?? "https://example.com")}">Continue setup</a></p>`;
+  const fallbackText = `Hi {{full_name}},\n\nI wanted to share one practical next step for getting value from ${product?.name ?? "the product"}.\n\nReply if you want help.\n\nContinue setup: ${product?.url ?? "https://example.com"}`;
 
   try {
     const response = await (env.AI as any).run("@cf/meta/llama-3.1-8b-instruct", {
@@ -23,7 +23,7 @@ export async function generateLifecycleTemplate(env: Env, product: Product | nul
                   brand_voice: product.brand_voice
                 }
               : null,
-            required_variables: ["first_name", "company", "unsubscribe_url"]
+            required_variables: ["full_name"]
           })
         }
       ]

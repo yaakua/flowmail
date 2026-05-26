@@ -45,14 +45,6 @@ export function runComplianceChecks(input: ComplianceInput) {
     });
   }
 
-  if (!/\{\{\s*unsubscribe_url\s*\}\}/.test(input.htmlBody) && !/\bunsubscribe\b/i.test(input.htmlBody + input.textBody)) {
-    findings.push({
-      code: "missing_unsubscribe",
-      severity: "error",
-      message: "Campaign templates must include an unsubscribe link."
-    });
-  }
-
   if (input.totalRecipients <= 0) {
     findings.push({
       code: "empty_audience",

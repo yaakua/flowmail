@@ -3,18 +3,24 @@ import { Link, useParams } from "react-router";
 import { AppShell, useLocale } from "../components/AppShell";
 import { api } from "../lib/api";
 import { t, translateStatus } from "../i18n";
-import { htmlToText } from "@flowmail/email-core";
+import { appendComplianceFooter, htmlToText, renderTemplate } from "@flowmail/email-core";
+import { templateVariablesForDisplay } from "../lib/templateVariables";
 
 export default function CampaignDetail() {
   const locale = useLocale();
   const params = useParams();
   const [data, setData] = useState<any>(null);
+  const [preview, setPreview] = useState<any>(null);
   const [batchSize, setBatchSize] = useState(50);
   const [message, setMessage] = useState("");
 
   async function load() {
-    const nextData = await api<any>(`/api/v1/campaigns/${params.campaignId}`);
+    const [nextData, nextPreview] = await Promise.all([
+      api<any>(`/api/v1/campaigns/${params.campaignId}`),
+      api<any>(`/api/v1/campaigns/${params.campaignId}/preview-contact`)
+    ]);
     setData(nextData);
+    setPreview(nextPreview);
   }
 
   useEffect(() => {
@@ -41,10 +47,17 @@ export default function CampaignDetail() {
 
   if (!data) return <AppShell><p className="muted">{t(locale, "loading")}</p></AppShell>;
   const { campaign, template } = data;
-  const variables = parseVariables(template.variables_json);
+  const variables = templateVariablesForDisplay(template.variables_json);
   const availableRecipients = data.audience?.sendableCount ?? 0;
   const selectedBatchSize = availableRecipients > 0 ? clampBatchSize(batchSize, availableRecipients) : 1;
   const sendPath = `send?limit=${selectedBatchSize}`;
+  const previewValues = buildPreviewValues(preview?.contact, data.product?.name);
+  const previewSubject = renderTemplate(template.subject, previewValues);
+  const previewHtml = appendComplianceFooter(
+    renderTemplate(template.html_body, previewValues),
+    data.product?.organization_address || "Organization address preview",
+    previewValues.unsubscribe_url
+  );
 
   return (
     <AppShell>
@@ -102,14 +115,14 @@ export default function CampaignDetail() {
             <h2>{t(locale, "variables")}</h2>
             <p className="muted">{t(locale, "variablesHelp")}</p>
             <div className="chip-cloud">
-              {(variables.length ? variables : ["first_name", "email", "company", "unsubscribe_link"]).map((name) => <span className="soft-pill" key={name}>{`{{ ${name} }}`}</span>)}
+              {(variables.length ? variables : ["full_name"]).map((name) => <span className="soft-pill" key={name}>{`{{ ${name} }}`}</span>)}
             </div>
           </section>
           <section className="panel">
             <h2>{t(locale, "emailPreview")}</h2>
             <div className="email-preview">
-              <strong>{template.subject}</strong>
-              <div dangerouslySetInnerHTML={{ __html: template.html_body }} />
+              <strong>{previewSubject}</strong>
+              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
           </section>
         </div>
@@ -123,11 +136,17 @@ function clampBatchSize(value: number, available: number) {
   return Math.max(1, Math.min(normalized, Math.max(available, 1)));
 }
 
-function parseVariables(value: string | null | undefined) {
-  try {
-    const parsed = JSON.parse(value || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function buildPreviewValues(contact: any, productName: string | null | undefined) {
+  const firstName = contact?.first_name ?? "Preview";
+  const lastName = contact?.last_name ?? "Contact";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || "Preview Contact";
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return {
+    email: contact?.email ?? "preview@example.com",
+    first_name: firstName,
+    last_name: lastName,
+    full_name: fullName,
+    company: contact?.company ?? productName ?? "",
+    unsubscribe_url: `${origin}/unsubscribe/preview`
+  };
 }

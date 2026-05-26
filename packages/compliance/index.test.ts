@@ -17,4 +17,19 @@ describe("compliance checks", () => {
     expect(result.ok).toBe(false);
     expect(result.findings.some((finding) => finding.code === "domain_not_allowed")).toBe(true);
   });
+
+  it("does not require templates to include the system-managed unsubscribe link", () => {
+    const result = runComplianceChecks({
+      fromEmail: "hello@example.com",
+      allowedDomains: ["example.com"],
+      subject: "Activation help",
+      htmlBody: "<p>Hello</p>",
+      textBody: "Hello",
+      organizationAddress: "123 Market St",
+      totalRecipients: 1,
+      suppressedRecipients: 0,
+      consentlessRecipients: 0
+    });
+    expect(result.ok).toBe(true);
+  });
 });

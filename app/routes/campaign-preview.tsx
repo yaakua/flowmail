@@ -4,6 +4,7 @@ import { AppShell, localizedPath, useLocale } from "../components/AppShell";
 import { Stepper } from "../components/Workflow";
 import { api } from "../lib/api";
 import { t, translateStatus } from "../i18n";
+import { templateVariablesForDisplay } from "../lib/templateVariables";
 
 export default function CampaignPreview() {
   const locale = useLocale();
@@ -58,7 +59,7 @@ function PreviewAside({ data }: { data: any }) {
         <h2>{t(locale, "emailSummary")}</h2>
         <div className="mini-row"><strong>{t(locale, "type")}</strong><span>{data.template.type}</span></div>
         <div className="mini-row"><strong>{t(locale, "status")}</strong><span>{translateStatus(locale, data.campaign.status)}</span></div>
-        <div className="mini-row"><strong>{t(locale, "variables")}</strong><span>{parseVariables(data.template.variables_json).join(", ") || t(locale, "noVariables")}</span></div>
+        <div className="mini-row"><strong>{t(locale, "variables")}</strong><span>{templateVariablesForDisplay(data.template.variables_json).join(", ") || t(locale, "noVariables")}</span></div>
       </section>
       <section className="side-card">
         <h2>{t(locale, "renderChecks")}</h2>
@@ -68,13 +69,4 @@ function PreviewAside({ data }: { data: any }) {
       </section>
     </div>
   );
-}
-
-function parseVariables(value: string | null | undefined) {
-  try {
-    const parsed = JSON.parse(value || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }

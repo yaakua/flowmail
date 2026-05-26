@@ -596,11 +596,12 @@ app.get("/api/v1/campaigns/:id", async (c) => {
   const campaign = await c.env.DB.prepare("SELECT * FROM campaigns WHERE id = ?").bind(c.req.param("id")).first<Campaign>();
   if (!campaign) return c.json({ error: "Not found" }, 404);
   const template = await c.env.DB.prepare("SELECT * FROM templates WHERE id = ?").bind(campaign.template_id).first<Template>();
-  const [recipients, events, sendRuns, audience] = await Promise.all([
+  const [recipients, events, sendRuns, audience, product] = await Promise.all([
     c.env.DB.prepare("SELECT * FROM campaign_recipients WHERE campaign_id = ? ORDER BY created_at DESC LIMIT 100").bind(campaign.id).all(),
     c.env.DB.prepare("SELECT event_type, COUNT(*) as count FROM email_events WHERE campaign_id = ? GROUP BY event_type").bind(campaign.id).all(),
     getCampaignSendRuns(c.env.DB, campaign.id, 20),
-    campaignAudience(c.env.DB, campaign.id)
+    campaignAudience(c.env.DB, campaign.id),
+    getProduct(c.env.DB)
   ]);
   return c.json({
     campaign,
@@ -608,7 +609,8 @@ app.get("/api/v1/campaigns/:id", async (c) => {
     recipients: recipients.results ?? [],
     events: events.results ?? [],
     sendRuns,
-    audience: audienceSummary(audience)
+    audience: audienceSummary(audience),
+    product
   });
 });
 
@@ -620,7 +622,7 @@ app.get("/api/v1/campaigns/:id/preview-contact", async (c) => {
   const product = await getProduct(c.env.DB);
   const audience = await campaignAudience(c.env.DB);
   const contact = audience.eligible[0] ?? audience.contacts[0] ?? null;
-  const values: Record<string, string> = contact ? contactValues(contact) : { first_name: "Preview", last_name: "", company: product.name, email: "preview@example.com" };
+  const values: Record<string, string> = contact ? contactValues(contact) : { first_name: "Preview", last_name: "Contact", full_name: "Preview Contact", company: product.name, email: "preview@example.com" };
   values.unsubscribe_url = `${requestPublicAppUrl(c.req.url, c.env)}/unsubscribe/preview`;
   const renderedHtml = renderTemplate(template.html_body, values);
   const renderedText = renderTemplate(template.text_body, values);
@@ -665,7 +667,7 @@ app.post("/api/v1/campaigns/draft", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO templates (id, name, type, subject, html_body, text_body, variables_json, compliance_status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(templateId, body.name ?? "Lifecycle email", "lifecycle", draft.subject, draft.html_body, draft.text_body, JSON.stringify(["first_name", "company", "unsubscribe_url"]), "draft", now, now),
+    ).bind(templateId, body.name ?? "Lifecycle email", "lifecycle", draft.subject, draft.html_body, draft.text_body, JSON.stringify(["full_name"]), "draft", now, now),
     c.env.DB.prepare(
       `INSERT INTO campaigns (id, name, status, goal, template_id, audience_filter_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -1525,11 +1527,13 @@ function withLocalReplyRoutingSkip(result: Awaited<ReturnType<typeof checkCloudf
 
 function contactValues(contact: Contact): Record<string, string> {
   const custom = JSON.parse(contact.custom_fields_json || "{}") as Record<string, string>;
+  const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim();
   return {
     ...custom,
     email: contact.email,
     first_name: contact.first_name ?? "",
     last_name: contact.last_name ?? "",
+    full_name: fullName || contact.first_name || contact.email,
     company: contact.company ?? ""
   };
 }
